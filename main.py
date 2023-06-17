@@ -66,9 +66,10 @@ pio_1 = PIO(1)
 pio_1.remove_program()
 
 # Define the asm_pio state machine - pushes bytes to the pins
-# 10 output pins, will pull 10 bits at a time from DMA (i.e., portions of the 32 bit values in the DMA)
+# 10 output pins, will pull 10 bits at a time for DMA (i.e., use 30 bits of a 32 bit integer)
 @asm_pio(in_shiftdir=PIO.SHIFT_LEFT, autopush=True, push_thresh=30, sideset_init=(PIO.OUT_LOW))
 def sideset_test():
+    # Use the "sideset" to generate the ADC10080 clock signal
     nop()          .side(1)    
     in_(pins, 10)  .side(0)
     
@@ -78,7 +79,7 @@ def sideset_test():
     nop()          .side(1)
     in_(pins, 10)  .side(0)    
     
-# The bit pattern generator    
+# The bit pattern generator - this will generate a 16 bit test pattern    
 @asm_pio(sideset_init=(PIO.OUT_LOW))
 def waveform_out():
     nop()  .side(1)
@@ -104,7 +105,8 @@ def check_register(addr):
     ret = mem32[addr]
     
     return ret    
-    
+
+# Quick stop of the DMA
 @micropython.viper
 def stopDMA_adc():
     
@@ -116,11 +118,10 @@ def stopDMA_adc():
     mem32[CH0_CTRL_TRIG] = mem32[CH0_CTRL_TRIG] & 0xFFFFFFFE
     mem32[CH1_CTRL_TRIG] = mem32[CH1_CTRL_TRIG] & 0xFFFFFFFE
 
-
 # Arrays that will store the starting addresses of the waveforms
 p_ar_adc = array('I', [0])
 
-# Start the DMA - get data from the pins through the PIO, write to the array
+# Special procedure to stop the DMA - i.e., once DMA 0 reaches the end, halt the DMA
 @micropython.viper
 def stopDMA_chain():
     
@@ -198,7 +199,7 @@ def startDMA_adc(ar, nword):
 NUM_ARRAY_ADC = 256
 wave_ADC = array("I", [0] * (NUM_ARRAY_ADC))
 
-# Use GP0 as the base pin for output stream, use PIO0, i.e., state machine(0)
+# Use GP0 as the base pin for the input stream, use PIO0, i.e., state machine(0)
 sm_test = StateMachine(0, sideset_test, freq = 192000000, sideset_base = Pin(11), in_base = Pin(0))
 
 # The bit pattern generator
@@ -212,5 +213,3 @@ startDMA_adc(wave_ADC, NUM_ARRAY_ADC)
 # Let the startup conditions settle out
 time.sleep(0.1)
 stopDMA_chain()
-
-
